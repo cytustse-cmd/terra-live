@@ -412,8 +412,8 @@ TL.ui = (function () {
   function startClock() {
     function tick() {
       const d = new Date();
-      $('clockTime').textContent = U.fmtUTC(d);
-      $('clockDate').textContent = U.fmtUTCDate(d) + ' ' + ['周日', '周一', '周二', '周三', '周四', '周五', '周六'][d.getUTCDay()];
+      $('clockTime').textContent = U.fmtCST(d);
+      $('clockDate').textContent = U.fmtCSTDate(d) + ' ' + U.cstWeekday(d);
     }
     tick();
     setInterval(tick, 1000);

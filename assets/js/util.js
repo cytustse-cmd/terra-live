@@ -16,9 +16,25 @@ TL.util = (function () {
     const t = d instanceof Date ? d : new Date(d);
     return `${t.getUTCFullYear()}-${pad(t.getUTCMonth() + 1)}-${pad(t.getUTCDate())}`;
   }
-  function fmtLocal(d) {
+  /* 北京时间（UTC+8）：epoch 平移 8 小时后用 getUTC* 读墙钟，不受访客设备时区影响 */
+  function cstDate(d) {
     const t = d instanceof Date ? d : new Date(d);
-    return `${pad(t.getMonth() + 1)}-${pad(t.getDate())} ${pad(t.getHours())}:${pad(t.getMinutes())}`;
+    return new Date(t.getTime() + 480 * 60000);
+  }
+  function fmtCST(d) {
+    const t = cstDate(d);
+    return `${pad(t.getUTCHours())}:${pad(t.getUTCMinutes())}:${pad(t.getUTCSeconds())}`;
+  }
+  function fmtCSTDate(d) {
+    const t = cstDate(d);
+    return `${t.getUTCFullYear()}-${pad(t.getUTCMonth() + 1)}-${pad(t.getUTCDate())}`;
+  }
+  function cstWeekday(d) {
+    return ['周日', '周一', '周二', '周三', '周四', '周五', '周六'][cstDate(d).getUTCDay()];
+  }
+  function fmtLocal(d) {
+    const t = cstDate(d);
+    return `${pad(t.getUTCMonth() + 1)}-${pad(t.getUTCDate())} ${pad(t.getUTCHours())}:${pad(t.getUTCMinutes())}`;
   }
   function fmtNum(v, d) {
     if (v === null || v === undefined || Number.isNaN(v)) return '--';
@@ -225,6 +241,7 @@ TL.util = (function () {
   return {
     clamp, lerp, round, pad,
     fmtUTC, fmtUTCDate, fmtLocal, fmtNum, timeAgo, fmtCoord,
+    fmtCST, fmtCSTDate, cstWeekday,
     esc, throttle, debounce, fetchJSON, fetchText, fetchJSONPost, fetchJSONRetry, pacer, meteoGate,
     withDeadline, nextQuotaReset, meteoCooldown, cacheSet, cacheGet, fmtAgo, chunks, hash, normLon
   };
