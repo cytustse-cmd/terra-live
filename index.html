@@ -1,0 +1,261 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>TERRA LIVE · 全球自然灾害实时监测</title>
+<meta name="description" content="汇聚 USGS、NASA EONET、GDACS、NOAA、Open-Meteo 的全球自然灾害与气候异常实时监测地图：地震、高温、暴雨、洪涝、泥石流、热带气旋、野火、火山、厄尔尼诺。">
+<meta name="theme-color" content="#04070f">
+<meta name="color-scheme" content="dark">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="TERRA LIVE">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="format-detection" content="telephone=no">
+<link rel="stylesheet" href="assets/vendor/maplibre-gl.css">
+<link rel="stylesheet" href="assets/css/app.css">
+</head>
+<body>
+<div id="app">
+  <div id="map"></div>
+  <div id="scanlines"></div>
+  <div id="vignette"></div>
+
+  <!-- 顶栏 -->
+  <header class="topbar glass">
+    <div class="brand">
+      <div class="brand-mark"></div>
+      <div class="brand-text">
+        <b>TERRA LIVE</b>
+        <span>Global Hazard Monitor</span>
+      </div>
+    </div>
+    <div class="top-divider"></div>
+    <div class="live-badge" id="liveBadge" title="点击切换实时/暂停">
+      <span class="dot"></span><span id="liveText">LIVE</span>
+    </div>
+    <div class="top-divider"></div>
+    <div class="clock">
+      <span id="clockTime" class="mono">--:--:--</span><small>UTC</small>
+      <span class="clock-date" id="clockDate">----</span>
+    </div>
+    <div class="stat-strip">
+      <div class="stat-cell"><span class="k">在监事件</span><span class="v mono" id="stTotal">0</span></div>
+      <div class="stat-cell"><span class="k">15 分钟新增</span><span class="v mono hot" id="stFresh">0</span></div>
+      <div class="stat-cell"><span class="k">红色告警</span><span class="v mono" id="stRed">0</span></div>
+      <div class="stat-cell"><span class="k">数据源</span><span class="v mono cool" id="stSrc">0/7</span></div>
+    </div>
+    <div class="top-spacer"></div>
+    <div class="btn-row">
+      <button class="btn" id="btnRailL" title="事件面板 (L)" style="display:none">事件</button>
+      <button class="btn icon m-only" id="btnTools" title="图层与图例">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M12 3l9 5-9 5-9-5 9-5z"/><path d="M3 13l9 5 9-5"/></svg>
+      </button>
+      <button class="btn d-only" id="btnProjection" title="切换球面/平面投影 (G)">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="12" cy="12" r="9"/><ellipse cx="12" cy="12" rx="4" ry="9"/><path d="M3 12h18"/></svg>
+        球面
+      </button>
+      <button class="btn d-only" id="btnBasemap" title="切换底图">午夜</button>
+      <button class="btn icon" id="btnRefresh" title="立即刷新 (R)">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M20 11a8 8 0 1 0-2.3 5.6"/><path d="M20 5v6h-6"/></svg>
+      </button>
+      <button class="btn icon d-only" id="btnFull" title="全屏 (F)">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 9V4h5M20 15v5h-5M15 4h5v5M9 20H4v-5"/></svg>
+      </button>
+      <button class="btn" id="btnRailR" style="display:none">详情</button>
+    </div>
+  </header>
+
+  <div class="net-alert" id="netAlert">
+    <span class="warn-dot"></span>
+    <div class="na-text"><b>实时数据未连接</b><span>外部请求可能被拦截，检查网络后在浏览器中直接打开</span></div>
+    <button class="btn" id="netRetry">重试</button>
+  </div>
+
+  <div class="scrim" id="scrim"></div>
+
+  <!-- 左侧：总览 / 筛选 / 事件流 -->
+  <aside class="rail rail-left glass" id="railLeft">
+    <div class="sheet-head">
+      <span class="grip"></span>
+      <b>监测控制台</b>
+      <button class="x" data-close="railLeft" aria-label="关闭">✕</button>
+    </div>
+    <div class="overview">
+      <div class="ov-grid">
+        <div class="ov-tile accent">
+          <div class="k">在监事件</div>
+          <div class="v mono" id="ovTotal">0</div>
+          <div class="u" id="ovTotalU">当前时间窗</div>
+        </div>
+        <div class="ov-tile hot">
+          <div class="k">最高等级</div>
+          <div class="v mono" id="ovMaxSev">--</div>
+          <div class="u" id="ovMaxSevU">severity</div>
+        </div>
+        <div class="ov-tile">
+          <div class="k">最活跃</div>
+          <div class="v mono" id="ovTopHaz" style="font-size:15px">--</div>
+          <div class="u" id="ovTopHazU">类型</div>
+        </div>
+      </div>
+      <div class="ov-donut">
+        <div id="donutBox"></div>
+        <div class="donut-legend" id="donutLegend"></div>
+      </div>
+    </div>
+
+    <div class="panel-head">
+      <h3>灾害类型</h3>
+      <span class="sub" id="hazSub">全部开启</span>
+      <button class="tgl" id="btnAllHaz" title="全选/全不选">◍</button>
+    </div>
+    <div class="filters">
+      <div class="chips" id="chips"></div>
+      <div class="toolbar">
+        <label class="search">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg>
+          <input type="text" id="searchInput" placeholder="搜索事件 / 地区">
+        </label>
+        <div class="seg" id="sortSeg">
+          <button data-sort="time" class="on">最新</button>
+          <button data-sort="severity">最强</button>
+        </div>
+      </div>
+      <div class="toolbar" style="margin-top:7px">
+        <span class="mini-label">地震震级</span>
+        <div class="seg" id="magSeg">
+          <button data-mag="0">全部</button>
+          <button data-mag="2.5" class="on">≥2.5</button>
+          <button data-mag="4.5">≥4.5</button>
+        </div>
+      </div>
+      <div class="toolbar" style="margin-top:7px">
+        <div class="seg" id="winSeg"></div>
+        <button class="btn" id="btnOnlyNew" style="flex:1 1 100%;justify-content:center">只看 15 分钟内</button>
+      </div>
+    </div>
+
+    <div class="panel-head" style="border-top:1px solid var(--line-soft)">
+      <h3>事件流</h3>
+      <span class="sub" id="listSub">--</span>
+    </div>
+    <div class="scroll"><div class="ev-list" id="evList"></div></div>
+
+    <div class="panel-head" style="border-top:1px solid var(--line-soft)">
+      <h3>数据源状态</h3>
+      <span class="sub" id="srcSub">--</span>
+    </div>
+    <div class="src" id="srcBox"></div>
+  </aside>
+
+  <!-- 右侧：详情 / 气候 / 极值 -->
+  <aside class="rail rail-right glass" id="railRight">
+    <div class="sheet-head">
+      <span class="grip"></span>
+      <b>事件详情</b>
+      <button class="x" data-close="railRight" aria-label="关闭">✕</button>
+    </div>
+    <div class="panel-head sheet-dup">
+      <h3>事件详情</h3>
+      <span class="sub" id="detailSub">未选择</span>
+    </div>
+    <div class="scroll" id="rightScroll">
+      <div class="detail" id="detailBox">
+        <div class="detail-empty">
+          点击地图上的任意标记，或从事件流中选择一条记录<br>
+          查看 <b>强度、坐标、数据来源与实时元信息</b>
+        </div>
+      </div>
+    </div>
+
+    <div class="panel-head" style="border-top:1px solid var(--line-soft)">
+      <h3>气候监测 · 厄尔尼诺</h3>
+      <span class="sub" id="ensoSub">载入中</span>
+    </div>
+    <div class="climate" id="climateBox">
+      <div class="chart-empty">正在获取海温与 ONI 序列…</div>
+    </div>
+
+    <div class="panel-head" style="border-top:1px solid var(--line-soft)">
+      <h3>全球极值</h3>
+      <span class="sub" id="extSub">当前时间窗</span>
+    </div>
+    <div class="extremes" id="extBox"></div>
+  </aside>
+
+  <!-- 地图工具 -->
+  <div class="map-tools">
+    <div class="tool-card glass">
+      <h4>图层</h4>
+      <div class="sw on" data-layer="field"><span class="track"></span>全球温度场</div>
+      <div class="sw on" data-layer="sst"><span class="track"></span>海温异常场</div>
+      <div class="sw on" data-layer="terminator"><span class="track"></span>昼夜分界</div>
+      <div class="sw on" data-layer="grid"><span class="track"></span>经纬网</div>
+      <div class="sw on" data-layer="zones"><span class="track"></span>预警影响区</div>
+    </div>
+    <div class="tool-card glass m-card" id="displayCard">
+      <h4>显示</h4>
+      <button class="tool-btn" id="mProjection">投影<span class="tv" id="mProjLabel">球面</span></button>
+      <button class="tool-btn" id="mBasemap">底图<span class="tv" id="mBmLabel">午夜</span></button>
+      <button class="tool-btn" id="mFull">全屏<span class="tv">↗</span></button>
+    </div>
+    <div class="tool-card glass legend-scale" id="legendCard">
+      <h4>图例</h4>
+      <div id="legendBody"></div>
+    </div>
+  </div>
+
+  <div class="map-status" id="mapStatus">
+    <span>中心 <b>--</b></span><span>缩放 <b>--</b></span><span>已绘 <b>--</b></span>
+  </div>
+
+  <!-- 底部快讯 -->
+  <footer class="ticker glass">
+    <div class="ticker-label"><span class="dot"></span>最新事件</div>
+    <div class="ticker-view"><div class="ticker-track" id="tickerTrack"></div></div>
+  </footer>
+
+  <div class="tooltip" id="tooltip"></div>
+  <div class="toasts" id="toasts"></div>
+
+  <div class="boot" id="boot">
+    <div class="boot-inner">
+      <div class="boot-radar"><div class="boot-sweep"></div></div>
+      <h1>TERRA LIVE</h1>
+      <p>Global Hazard Monitor</p>
+      <div class="boot-log" id="bootLog"></div>
+      <div class="boot-bar"><span id="bootBar"></span></div>
+    </div>
+  </div>
+</div>
+
+<noscript>
+  <style>#boot { display: none !important; }</style>
+  <div style="position:fixed;inset:0;z-index:99;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;padding:32px;text-align:center;background:#04070f;color:#dbe6f5;font-family:-apple-system,'PingFang SC',sans-serif">
+    <div style="letter-spacing:.28em;font-size:19px;font-weight:600">TERRA LIVE</div>
+    <p style="max-width:34em;margin:0;font-size:13px;line-height:1.8;color:#8fa3bd">
+      当前预览环境未执行 JavaScript，无法加载实时地图。<br>
+      请点右上角「分享」→「在 Safari 中打开」，或把文件保存到「文件」App 后用浏览器打开。
+    </p>
+  </div>
+</noscript>
+
+<script src="assets/vendor/maplibre-gl.js"></script>
+<script src="assets/js/config.js"></script>
+<script src="assets/js/util.js"></script>
+<script src="assets/js/store.js"></script>
+<script src="assets/js/charts.js"></script>
+<script src="assets/js/sources/geocode.js"></script>
+<script src="assets/js/sources/usgs.js"></script>
+<script src="assets/js/sources/eonet.js"></script>
+<script src="assets/js/sources/gdacs.js"></script>
+<script src="assets/js/sources/nws.js"></script>
+<script src="assets/js/sources/weather.js"></script>
+<script src="assets/js/sources/ocean.js"></script>
+<script src="assets/js/sources/oni.js"></script>
+<script src="assets/js/map.js"></script>
+<script src="assets/js/ui.js"></script>
+<script src="assets/js/app.js"></script>
+</body>
+</html>
