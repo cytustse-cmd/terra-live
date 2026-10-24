@@ -516,6 +516,7 @@ TL.ui = (function () {
       };
     });
     $('btnBasemap').onclick = () => TL.app.cycleBasemap();
+    $('btnProjection').onclick = () => TL.app.toggleProjection();
     $('btnRefresh').onclick = () => TL.app.refreshAll(true);
     $('btnFull').onclick = () => {
       if (document.fullscreenElement) document.exitFullscreen();

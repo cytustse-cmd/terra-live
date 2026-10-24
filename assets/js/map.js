@@ -13,6 +13,7 @@ TL.mapView = (function () {
   let rafId = null;
   let lastPaint = 0;
   let pulsePaused = false;
+  let projectionKind = 'globe';
   const layersOn = { field: true, sst: true, terminator: true, grid: true, zones: true, labels: true };
   const iconCache = {};
   const isSmall = () => window.innerWidth <= 820 || (window.innerHeight <= 480 && window.innerWidth <= 960);
@@ -437,6 +438,7 @@ TL.mapView = (function () {
   }
 
   function setProjection(kind) {
+    projectionKind = kind;
     if (!map) return;
     if (typeof map.setProjection === 'function') {
       map.setProjection({ type: kind });
@@ -458,6 +460,8 @@ TL.mapView = (function () {
         addLayers();
         refresh();
         map.setPaintProperty('graticule-line', 'line-color', 'rgba(120,180,255,0.13)');
+        // 新样式默认平面投影，把用户当前选择重新套上
+        if (typeof map.setProjection === 'function') map.setProjection({ type: projectionKind });
       }, 350);
     });
   }
